@@ -60,26 +60,24 @@ const handleMessage = (message, respond) => {
       break
   }
 
-  if(dice.operation) {
-    switch(dice.operation) {
-      case '+':
-        result += dice.modifier
-        break
+  switch(dice.operation) {
+    case '+':
+      result += dice.modifier
+      break
 
-      case '-':
-        result -= dice.modifier
-        break
+    case '-':
+      result -= dice.modifier
+      break
 
-      case 'x':
-        operationSymbol = '*'
-      case '*':
-        result = result * dice.modifier
-        break
+    case 'x':
+      operationSymbol = '*'
+    case '*':
+      result = result * dice.modifier
+      break
 
-      case '/':
-        result = result / dice.modifier
-        break
-    }
+    case '/':
+      result = result / dice.modifier
+      break
   }
 
   if(dice.description)

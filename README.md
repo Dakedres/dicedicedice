@@ -3,6 +3,8 @@
 
 A discord bot for metaphorically "rolling dice"/generating random values. Made for use with Weaverdice systems.
 
+Icon by [Zauromoun]()
+
 ## Features
 - Cool ez syntax blatantly copied from [rollem.rocks](https://rollem.rocks):
 > 2d6 - 1
