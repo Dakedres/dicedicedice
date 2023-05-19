@@ -1,6 +1,7 @@
+![an image of the eater](./assets/eater-transparent.png)
 # dicedicedice
 
-A bot for metaphorically "rolling dice"/generating random values. Made for use with Weaverdice systems.
+A discord bot for metaphorically "rolling dice"/generating random values. Made for use with Weaverdice systems.
 
 ## Features
 - Cool ez syntax blatantly copied from [rollem.rocks](https://rollem.rocks):
