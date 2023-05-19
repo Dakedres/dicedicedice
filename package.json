@@ -2,6 +2,10 @@
   "name": "dicedicedice",
   "version": "1.0.0",
   "main": "src/index.js",
+  "scripts": {
+    "start": "node .",
+    "init": "yarn install && cp template.env .env"
+  },
   "author": "Dakedres",
   "license": "MIT",
   "private": true,
