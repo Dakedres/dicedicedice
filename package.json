@@ -1,0 +1,13 @@
+{
+  "name": "dicedicedice",
+  "version": "1.0.0",
+  "main": "src/index.js",
+  "author": "Dakedres",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "discord.js": "^14.11.0",
+    "dotenv": "^16.0.3"
+  }
+}
