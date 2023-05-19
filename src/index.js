@@ -1,21 +1,26 @@
 import { Client, GatewayIntentBits } from 'discord.js';
 import * as dotenv from 'dotenv'
+import constants from './constants.js';
 dotenv.config()
-
-const regex = /^(\d+)?([dhl])(\d+)(\s*([+\-*x\/])\s*(\d+))?(.*?)$/
 
 const replies = new Map()
 
-const parseMatch = match => {
+const parseRoll = content => {
+  let match = constants.rollRegex.exec(content.trim())
+
+  if(match == null)
+    return
+
   let [
     count,
     mode,
     size,
     modifierString,
     operation,
-    modifier,
-    description
+    modifier
   ] = match.slice(1)
+
+  let description = content.slice(match[0].length)
 
   return {
     count: count ? parseInt(count) : 1,
@@ -23,20 +28,53 @@ const parseMatch = match => {
     size: parseInt(size),
     operation,
     modifier: modifier ? parseInt(modifier) : undefined,
-    description: description.trim()
+    descriptionConditions: description && parseDescription(description)
   }
 }
 
+const parseDescription = description => {
+  let conditions = [],
+      match
+
+  while((match = constants.descriptionRegex.exec(description)) !== null) {
+    // Prevent infinite loops if there's somehow a zero-length match
+    if(match.index == constants.descriptionRegex.lastIndex)
+      regex.lastIndex++
+
+    let [
+      range,
+      upperRange,
+      content
+    ] = match.slice(1)
+
+    conditions.push({
+      range: range && {
+        lower: range[0],
+        upper: upperRange ? upperRange[1] : range[0]
+      },
+      content: content.trim()
+    })
+  }
+
+  return conditions
+}
+
 const handleMessage = (message, respond) => {
-  let match = regex.exec(message.content.trim())
+  let dice = parseRoll(message.content)
 
-  if(match == null)
-    return
+  if(dice == undefined)
+    return // No dice
 
-  let dice = parseMatch(match)
-
-  if(dice.size > 256) {
+  if(dice.size > 255) {
     respond('That die is way too big... .-.')
+    return
+  } else if(dice.size < 2) {
+    respond('I cannot even fathom a die with that geometry ;-;')
+    return
+  }
+
+  if(dice.count > 100) {
+    respond('I don\'t have that many dice O_O')
     return
   }
 
@@ -80,8 +118,12 @@ const handleMessage = (message, respond) => {
       break
   }
 
-  if(dice.description)
-    response += `'${dice.description}', `
+  if(dice.descriptionConditions) {
+    for(let { range, content } of dice.descriptionConditions) {
+      if(!range || result >= range.lower && result <= range.upper)
+        response += `'${content}', `
+    }
+  }
   
   response += `\` ${result} \` \u27F5 [${rolls.join(', ')}] ${dice.count + dice.mode + dice.size}`
 
@@ -141,8 +183,8 @@ client.on('messageUpdate', async (oldMessage, newMessage) => {
     let { id } = replies.get(newMessage.id)
 
     newMessage.channel.messages.fetch(id)
-      .then(reply => rehandleMessage(newMessage, reply))
-      .catch(err => messageCycle(newMessage, ) )
+      .then(reply => rehandleMessage(newMessage, reply) )
+      .catch(err => messageCycle(newMessage) )
   } else {
     messageCycle(newMessage)
   }
