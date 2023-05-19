@@ -7,17 +7,14 @@ Icon by [Zauromoun]()
 
 ## Features
 - Cool ez syntax blatantly copied from [rollem.rocks](https://rollem.rocks):
-> 2d6 - 1
-
+> ╭ 2d6 - 1  
 > ` 7 ` ⟵ [3, 5] 2d6 - 1
-- "take the lowest" rolls:
-> 2l6 + 3
-
-> ` 4 ` ⟵ [4, 1] 2l6 + 3
 - "take the highest" rolls:
-> 2h6 + 1
-
+> ╭ 2h6 + 1  
 > ` 6 ` ⟵ [4, 5] 2h6 + 1
+- "take the lowest" rolls:
+> ╭ 2l6 + 3  
+> ` 4 ` ⟵ [4, 1] 2l6 + 3
 - Multiplication/division/subtraction, whatever you want
 > d6 * 1
 
@@ -26,10 +23,20 @@ Icon by [Zauromoun]()
 > d6 / 3
 
 > d6 - 4
-- Command editing and recalculation!
+- Descriptions!
+> ╭ 2h6 + 1 eat pant  
+> 'eat pant',  7  ⟵ [4, 6] 2h6 + 1
+- Outcomes!
+> ╭ 2h6 + 1  
+> │ 1-2 your body rejects the pant  
+> │ 3-4 you manage to scarf it down  
+> │ 5-6 you absorb the nutrients of the pant  
+> 'your body rejects the pant', ` 2 ` ⟵ [1, 1] 2h6 + 1
+- Command editing and recalculation!  
+> There is not a demonstration for this
 
 
-Invite the bot by clicking [this link](https://discord.com/oauth2/authorize?client_id=1108595011026686002&permissions=3072&scope=bot)
+Invite the bot now! By clicking [this link](https://discord.com/oauth2/authorize?client_id=1108595011026686002&permissions=3072&scope=bot)!
 
 ## Installation
 
