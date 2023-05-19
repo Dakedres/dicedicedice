@@ -1,14 +1,22 @@
 {
   "name": "dicedicedice",
-  "version": "1.0.0",
+  "version": "1.1.0",
+  "description": "Dice bot",
   "main": "src/index.js",
   "scripts": {
     "start": "node .",
     "init": "yarn install && cp template.env .env"
   },
   "author": "Dakedres",
-  "license": "MIT",
-  "private": true,
+  "license": "GPL-3.0",
+  "homepage": "https://github.com/Dakedres/dicedicedice",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Dakedres/dicedicedice.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Dakedres/dicedicedice/issues"
+  },
   "type": "module",
   "dependencies": {
     "discord.js": "^14.11.0",
