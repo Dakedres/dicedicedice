@@ -25,8 +25,7 @@ const parseOptionRoll = expression => {
     modifier
   ] = match
     .slice(1)
-    .map(v => v == undefined ? null : v) // Allow us to merge it easier
-
+    
   return {
     count: parseRollInt(count),
     mode,
@@ -63,40 +62,30 @@ const parseRoll = expression => {
 }
 
 const pullDescription = (expression, match) => {
-  let description = expression.slice(match[0].length)
+  if(match[0].length == expression.length)
+    return
 
-  return description && parseDescription(description)
+  return parseDescription(expression.slice(match[0].length))
 }
 
 const parseDescription = description => {
-  const regex = constants.descriptionRegex
-
   let conditions = []
-  let range
-  let descriptionStart
   let match
 
-  let finishCondition = index =>
-    conditions.push({
-      range,
-      content: description.slice(descriptionStart, index).trim()
-    })
-
-  while((match = regex.exec(description)) !== null) {
-    if(range)
-      finishCondition(match.index)
-
+  while((match = constants.descriptionRegex.exec(description)) !== null) {
+    let range
     let [
       rangeExp,
-      valueExp
-    ] = match.slice(1)
+      valueExp,
+      content
+    ] = match.slice(2)
 
     if(rangeExp) {
       let split = rangeExp.split('-')
 
       range = {
-        lower: split[0] || -Infinity,
-        upper: split[1] || Infinity
+        lower: parseRollInt(split[0], -Infinity),
+        upper: parseRollInt(split[1], Infinity)
       }
     } else if(valueExp) {
       range = {
@@ -105,10 +94,12 @@ const parseDescription = description => {
       }
     }
 
-    descriptionStart = regex.lastIndex
+    conditions.push({
+      range,
+      content: content.trim()
+    })
   }
 
-  finishCondition()
   return conditions
 }
 
@@ -277,15 +268,12 @@ const pruneDB = async () => {
   for await(let key of db.keys()) {
     let [ guildId ] = key.split('!').slice(1)
 
-    console.log(guildId)
-
     if(validIds.includes(guildId))
       continue
 
     if(client.guilds.cache.has(guildId)) {
       validIds.push(guildId)
     } else {
-      console.log('Pruning key: ' + key)
       await db.del(key)
     }
   }
@@ -410,24 +398,25 @@ client.on('interactionCreate', async interaction => {
     return
   }
 
+  await interaction.deferReply()
   let roll = await openMacros(interaction.guild.id).get(interaction.commandName)
 
   if(roll) {
     let dice = parseRoll(roll)
-    let optionsRoll = interaction.options.get('options')
+    let options = interaction.options.get('options')
     
-    if(optionsRoll) {
-      let optionDice = parseOptionRoll(optionsRoll.value)
+    if(options) {
+      let optionDice = parseOptionRoll(options.value)
+
+      console.log(optionDice)
 
       for(let [ key, value ] of Object.entries(optionDice)) {
         if(value)
           dice[key] = value
       }
-
-      console.log(dice)
     }
 
-    rollDice(dice, content => interaction.reply(content) )
+    rollDice(dice, content => interaction.followUp(content) )
   }
 })
 
