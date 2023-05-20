@@ -8,9 +8,37 @@ dotenv.config()
 const replies = new Map()
 const commands = new Map()
 const db = new ClassicLevel('./db')
+ 
+const parseRollInt = (value, defaultValue) =>
+  value ? parseInt(value) : defaultValue
 
-const parseRoll = content => {
-  let match = constants.rollRegex.exec(content.trim())
+const parseOptionRoll = expression => {
+  let match = constants.optionRollRegex.exec(expression.trim())
+
+  let [ 
+    count,
+    modeSize,
+    mode,
+    size,
+    operationModifier,
+    operation,
+    modifier
+  ] = match
+    .slice(1)
+    .map(v => v == undefined ? null : v) // Allow us to merge it easier
+
+  return {
+    count: parseRollInt(count),
+    mode,
+    size: parseRollInt(size),
+    operation,
+    modifier: parseRollInt(modifier),
+    descriptionConditions: pullDescription(expression, match)
+  }
+}
+
+const parseRoll = expression => {
+  let match = constants.rollRegex.exec(expression.trim())
 
   if(match == null)
     return
@@ -24,16 +52,20 @@ const parseRoll = content => {
     modifier
   ] = match.slice(1)
 
-  let description = content.slice(match[0].length)
-
   return {
-    count: count ? parseInt(count) : 1,
+    count: parseRollInt(count, 1),
     mode,
-    size: parseInt(size),
+    size: parseRollInt(size),
     operation,
-    modifier: modifier ? parseInt(modifier) : undefined,
-    descriptionConditions: description && parseDescription(description)
+    modifier: parseRollInt(modifier),
+    descriptionConditions: pullDescription(expression, match)
   }
+}
+
+const pullDescription = (expression, match) => {
+  let description = expression.slice(match[0].length)
+
+  return description && parseDescription(description)
 }
 
 const parseDescription = description => {
@@ -47,14 +79,25 @@ const parseDescription = description => {
 
     let [
       range,
+      upperRangeExpression,
       upperRange,
       content
     ] = match.slice(1)
 
+    let lower = range[0],
+        upper
+
+    if(!upperRange) {
+      // Allow "X-" ranges to represent anything higher than X
+      upper = upperRangeExpression ? Infinity : lower
+    } else {
+      upper = upperRange[0]
+    }
+
     conditions.push({
       range: range && {
-        lower: range[0],
-        upper: upperRange ? upperRange[1] : range[0]
+        lower,
+        upper
       },
       content: content.trim()
     })
@@ -69,10 +112,10 @@ const handleMessage = (message, respond) => {
   if(dice == undefined)
     return // No dice
 
-  handleDice(dice, respond)
+  rollDice(dice, respond)
 }
 
-const handleDice = (dice, respond) => {
+const rollDice = (dice, respond) => {
   if(dice.size > 255) {
     respond('That die is way too big... .-.')
     return
@@ -203,7 +246,14 @@ const registerMacroCommands = async guildId => {
   for await (let [ name, dice ] of macros.iterator() )
     commands.push({
       name,
-      description: elipsify("Roll " + dice.replaceAll('\n', ';'), 100)
+      description: elipsify("Roll " + dice.replaceAll('\n', ';'), 100),
+      options: [
+        {
+          name: "options",
+          description: "Dice, modifiers, or descriptions to apply over the macro",
+          type: 3
+        }
+      ]
     })
 
   await rest.put(
@@ -358,8 +408,20 @@ client.on('interactionCreate', async interaction => {
 
   if(roll) {
     let dice = parseRoll(roll)
+    let optionsRoll = interaction.options.get('options').value
+    
+    if(optionsRoll) {
+      let optionDice = parseOptionRoll(optionsRoll)
 
-    handleDice(dice, content => interaction.reply(content) )
+      for(let [ key, value ] of Object.entries(optionDice)) {
+        if(value)
+          dice[key] = value
+      }
+
+      console.log(dice)
+    }
+
+    rollDice(dice, content => interaction.reply(content) )
   }
 })
 
