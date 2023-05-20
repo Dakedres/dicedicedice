@@ -1,7 +1,7 @@
 const constants = {
   rollRegex: /^(\d+)?([dhl])(\d+)(\s*([+\-*x\/])\s*(\d+))?/,
   optionRollRegex: /^(\d+)?(([dhl])(\d+))?(\s*[+\-*x\/]\s*\d+)?/,
-  descriptionRegex: /\s*(\d+(-(\d+)?)?)?([^;\n]+)/g,
+  descriptionRegex: /\s*(\d*-\d*)|(\d+)/g,
   macroNameRegex: /^[a-z0-9]+$/,
 
   commands: {

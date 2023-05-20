@@ -69,40 +69,46 @@ const pullDescription = (expression, match) => {
 }
 
 const parseDescription = description => {
-  let conditions = [],
-      match
+  const regex = constants.descriptionRegex
 
-  while((match = constants.descriptionRegex.exec(description)) !== null) {
-    // Prevent infinite loops if there's somehow a zero-length match
-    if(match.index == constants.descriptionRegex.lastIndex)
-      regex.lastIndex++
+  let conditions = []
+  let range
+  let descriptionStart
+  let match
+
+  let finishCondition = index =>
+    conditions.push({
+      range,
+      content: description.slice(descriptionStart, index).trim()
+    })
+
+  while((match = regex.exec(description)) !== null) {
+    if(range)
+      finishCondition(match.index)
 
     let [
-      range,
-      upperRangeExpression,
-      upperRange,
-      content
+      rangeExp,
+      valueExp
     ] = match.slice(1)
 
-    let lower = range[0],
-        upper
+    if(rangeExp) {
+      let split = rangeExp.split('-')
 
-    if(!upperRange) {
-      // Allow "X-" ranges to represent anything higher than X
-      upper = upperRangeExpression ? Infinity : lower
-    } else {
-      upper = upperRange[0]
+      range = {
+        lower: split[0] || -Infinity,
+        upper: split[1] || Infinity
+      }
+    } else if(valueExp) {
+      range = {
+        upper: valueExp,
+        lower: valueExp
+      }
     }
 
-    conditions.push({
-      range: range && {
-        lower,
-        upper
-      },
-      content: content.trim()
-    })
+    descriptionStart = regex.lastIndex
   }
 
+  finishCondition()
   return conditions
 }
 
@@ -408,10 +414,10 @@ client.on('interactionCreate', async interaction => {
 
   if(roll) {
     let dice = parseRoll(roll)
-    let optionsRoll = interaction.options.get('options').value
+    let optionsRoll = interaction.options.get('options')
     
     if(optionsRoll) {
-      let optionDice = parseOptionRoll(optionsRoll)
+      let optionDice = parseOptionRoll(optionsRoll.value)
 
       for(let [ key, value ] of Object.entries(optionDice)) {
         if(value)
