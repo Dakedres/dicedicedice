@@ -203,7 +203,7 @@ const registerMacroCommands = async guildId => {
   for await (let [ name, dice ] of macros.iterator() )
     commands.push({
       name,
-      description: "Roll " + dice.replaceAll('\n', ';')
+      description: elipsify("Roll " + dice.replaceAll('\n', ';'), 100)
     })
 
   await rest.put(
@@ -211,6 +211,9 @@ const registerMacroCommands = async guildId => {
     { body: commands }
   )
 }
+
+const elipsify = (string, maxLength) =>
+  string.length > maxLength ? string.slice(0, maxLength - 3) + '...' : string
 
 const pruneDB = async () => {
   let validIds = []
@@ -290,7 +293,6 @@ addCommand(
     //   interaction.followUp('A macro with this name already exists in this guild.')
     //   return
     // }
-
 
     await interaction.deferReply()
 

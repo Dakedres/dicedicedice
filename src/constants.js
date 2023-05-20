@@ -39,6 +39,7 @@ ${error.toString()}
 \`\`\`
 If this issue persists please report it here: <https://github.com/Dakedres/dicedicedice/issues>\
 `,
+
   aboutMessage: (guildCount) => `\
 A discord bot for metaphorically "rolling dice"/generating random values. Made for use with Weaverdice systems.
 
