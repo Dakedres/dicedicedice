@@ -16,12 +16,9 @@ Icon by [Zauromoun](https://www.tumblr.com/zauromoun)
 > ╭ 2l6 + 3  
 > ` 4 ` ⟵ [4, 1] 2l6 + 3
 - Multiplication/division/subtraction, whatever you want
-> d6 * 1
-
-> d6 x 2
-
-> d6 / 3
-
+> d6 * 1  
+> d6 x 2  
+> d6 / 3  
 > d6 - 4
 - Descriptions!
 > ╭ 2h6 + 1 eat pant  
@@ -31,10 +28,10 @@ Icon by [Zauromoun](https://www.tumblr.com/zauromoun)
 > │ 1-2 your body rejects the pant  
 > │ 3-4 you manage to scarf it down  
 > │ 5-6 you absorb the nutrients of the pant  
+> │ 7 become pant  
 > 'your body rejects the pant', ` 2 ` ⟵ [1, 1] 2h6 + 1
 - Command editing and recalculation!  
-> There is not a demonstration for this
-
+> There is no demonstration for this
 
 Invite the bot now! By clicking [this link](https://discord.com/oauth2/authorize?client_id=1108595011026686002&permissions=3072&scope=bot)!
 
@@ -54,5 +51,4 @@ npm i
 cp template.env .env
 ```
 
-
-You will need to provide a token and place it in the .env file.
+You will need to place your bot's token and ID in the .env file.
