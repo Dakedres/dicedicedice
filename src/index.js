@@ -1,9 +1,13 @@
-import { Client, GatewayIntentBits } from 'discord.js';
+import { Client, GatewayIntentBits, REST, Routes } from 'discord.js';
 import * as dotenv from 'dotenv'
 import constants from './constants.js';
+import { ClassicLevel } from 'classic-level';
+
 dotenv.config()
 
 const replies = new Map()
+const commands = new Map()
+const db = new ClassicLevel('./db')
 
 const parseRoll = content => {
   let match = constants.rollRegex.exec(content.trim())
@@ -65,6 +69,10 @@ const handleMessage = (message, respond) => {
   if(dice == undefined)
     return // No dice
 
+  handleDice(dice, respond)
+}
+
+const handleDice = (dice, respond) => {
   if(dice.size > 255) {
     respond('That die is way too big... .-.')
     return
@@ -79,10 +87,10 @@ const handleMessage = (message, respond) => {
   }
 
   let rolls = [ ...crypto.getRandomValues(new Uint8Array(dice.count) ) ]
-        .map(n => Math.ceil((n / 256) * dice.size)),
-      result = 0,
-      operationSymbol = dice.operation,
-      response = ''
+        .map(n => Math.ceil((n / 256) * dice.size))
+  let result = 0
+  let operationSymbol = dice.operation
+  let response = ''
 
   switch(dice.mode) {
     case 'd': 
@@ -163,6 +171,141 @@ const pruneReplies = () => {
   }
 }
 
+const interactionRespond = (interaction, content) => {
+  let reply = { content, ephemeral: true }
+
+  if(interaction.replied || interaction.deferred) {
+    return interaction.followUp(reply)
+  } else {
+    return interaction.reply(reply)
+  }
+}
+
+const handleError = (error, interaction) =>
+  interactionRespond(interaction, constants.errorMessage(error) )
+    .catch(reportingError => console.error('Could not display error message:\n  ', reportingError) )
+
+
+const addCommand = (data, callback) => {
+  commands.set(data.name, {
+    data,
+    execute: callback
+  })
+}
+
+const openMacros = guildId =>
+  db.sublevel(guildId).sublevel('macros')
+
+const registerMacroCommands = async guildId => {
+  let commands = []
+  let macros = openMacros(guildId)
+
+  for await (let [ name, dice ] of macros.iterator() )
+    commands.push({
+      name,
+      description: "Roll " + dice.replaceAll('\n', ';')
+    })
+
+  await rest.put(
+    Routes.applicationGuildCommands(process.env.DISCORD_ID, guildId),
+    { body: commands }
+  )
+}
+
+const pruneDB = async () => {
+  let validIds = []
+
+  for await(let key of db.keys()) {
+    let [ guildId ] = key.split('!').slice(1)
+
+    console.log(guildId)
+
+    if(validIds.includes(guildId))
+      continue
+
+    if(client.guilds.cache.has(guildId)) {
+      validIds.push(guildId)
+    } else {
+      console.log('Pruning key: ' + key)
+      await db.del(key)
+    }
+  }
+
+  return validIds
+}
+
+
+addCommand(
+  constants.commands.about,
+  async interaction => {
+    let embed = {
+      title: 'dicedicedice',
+      thumbnail: {
+        url: constants.iconUrl
+      },
+      description: constants.aboutMessage(client.guilds.cache.size) 
+    } 
+
+    await interaction.reply({
+      embeds: [ embed ],
+      ephemeral: true
+    })
+  }
+)
+
+addCommand(
+  constants.commands.macro,
+  async interaction => {
+    let name = interaction.options.get('name').value.toLowerCase()
+    
+    if(!constants.macroNameRegex.test(name) ) {
+      interaction.reply("Please provide a macro name that consists of only alphanumeric characters.")
+      return
+    }
+
+    if(commands.has(name)) {
+      interaction.reply("Uhh... I think that macro name is already taken by my own commands, sorry.")
+      return
+    }
+
+    // let dice = parseRoll(interaction.options.get('dice').value)
+    let dice = interaction.options.get('dice').value
+
+    if(!constants.rollRegex.test(dice) ) {
+      interaction.reply("Please provide a valid roll expression.")
+      return
+    }
+
+    // let exists = true
+    // let macros = openTable(interaction.guild, 'macros')
+    // let macro = await macros.get(name)
+    //   .catch(err => {
+    //     if(err.code == 'LEVEL_NOT_FOUND')
+    //       exists = false
+    //     else
+    //       handleError(err, interaction)
+    //   })
+
+    // if(exists) {
+    //   interaction.followUp('A macro with this name already exists in this guild.')
+    //   return
+    // }
+
+
+    await interaction.deferReply()
+
+    let macros = openMacros(interaction.guild.id)
+
+    await Promise.all([
+      macros.put(name, dice),
+      registerMacroCommands(interaction.guild.id)
+    ])
+    interaction.followUp(`Macro added! Try \`/${name}\``)
+  }
+)
+
+
+
 const client = new Client({
   intents: [
       GatewayIntentBits.Guilds,
@@ -172,8 +315,17 @@ const client = new Client({
   ]
 })
 
-client.on('ready', () => {
+const rest = new REST().setToken(process.env.DISCORD_TOKEN)
+
+client.on('ready', async () => {
   console.log("Logged in!")
+
+  let guildIds = await pruneDB()
+
+  for(let guildId of guildIds)
+    await registerMacroCommands(guildId)
+
+  console.log("Ready")
 })
 
 client.on('messageCreate', messageCycle)
@@ -190,5 +342,39 @@ client.on('messageUpdate', async (oldMessage, newMessage) => {
   }
 })
 
-client.login(process.env.DISCORD_TOKEN);
-setInterval(pruneReplies, 1000 * 60)
+client.on('interactionCreate', async interaction => {
+  if(!interaction.isChatInputCommand())
+    return
+
+  if(commands.has(interaction.commandName) ) {
+    commands.get(interaction.commandName).execute(interaction)
+      .catch(err => handleError(err, interaction) )
+    return
+  }
+
+  let roll = await openMacros(interaction.guild.id).get(interaction.commandName)
+
+  if(roll) {
+    let dice = parseRoll(roll)
+
+    handleDice(dice, content => interaction.reply(content) )
+  }
+})
+
+
+
+;(async () => {
+  await rest.put(
+    Routes.applicationCommands(process.env.DISCORD_ID),
+    {
+      body: [ ...commands.values() ]
+        .map(command => command.data )
+    }
+  )
+    .catch(err => console.error('Command registration failed: ', err) )  
+
+  await client.login(process.env.DISCORD_TOKEN)
+    .catch(err => console.error('Login failed: ', err) )
+
+  setInterval(pruneReplies, 1000 * 60)
+})()
