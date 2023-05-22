@@ -312,11 +312,8 @@ addCommand(
   }
 )
 
-const getMacro = async (guild, name) => {
-  
-  
-  return guild && guild[name]
-}
+const openResponses = (interaction, ephemeral) => async content =>
+  interaction.reply({ content, ephemeral })
 
 addSubcommands({
   name: 'macro',
@@ -364,26 +361,20 @@ addSubcommands({
 }, {
   add: async interaction => {
     let name = interaction.options.get('name').value.toLowerCase()
-    
-    if(!constants.macroNameRegex.test(name) ) {
-      interaction.reply("Please provide a macro name that consists of only alphanumeric characters.")
-      return
-    }
+    let respond = openResponses(interaction, true)
+  
+    if(!constants.macroNameRegex.test(name))
+      return respond("Please provide a macro name that consists of only alphanumeric characters.")
 
-    if(commands.has(name)) {
-      interaction.reply("Uhh,, I think that macro name is already taken by my own commands, sorry.")
-      return
-    }
+    if(commands.has(name))
+      return respond("Uhh,, I think that macro name is already taken by my own commands, sorry.")
 
-    // let dice = parseRoll(interaction.options.get('dice').value)
     let dice = interaction.options.get('dice').value
 
-    if(!constants.rollRegex.test(dice) ) {
-      interaction.reply("Please provide a valid roll expression.")
-      return
-    }
+    if(!constants.rollRegex.test(dice) )
+      return respond("Please provide a valid roll expression.")
 
-    await interaction.deferReply()
+    await interaction.deferReply({ ephemeral: true })
 
     await Promise.all([
       openMacros(interaction.guild.id).put(name, dice),
@@ -394,25 +385,21 @@ addSubcommands({
   remove: async interaction => {
     let name = interaction.options.get('name').value.toLowerCase()
     let macros = macroCache.get(interaction.guild.id)
+    let respond = openResponses(interaction, true)
     
-    if(!macros) {
-      await interaction.reply('There aren\'t even any macros in this guild!')
-      return
-    }
+    if(!macros)
+      return respond('There aren\'t even any macros in this guild!')
 
     let dice = macros && macroCache.get(interaction.guild.id)[name]
 
-    if(!dice){
-      await interaction.reply("There isn't a macro with that name .-.")
-      return
-    }
+    if(!dice)
+      return respond("There isn't a macro with that name .-.")
 
-    await interaction.deferReply()
+    await interaction.deferReply({ ephemeral: true })
     await Promise.all([
       openMacros(interaction.guild.id).del(name),
       reloadMacros(interaction.guild.id)
     ])
-      .catch(handleError(interaction))
 
     await interaction.followUp(`Removed \`${name}\`, its dice expression was: \`\`\`${dice}\`\`\``)
   }
