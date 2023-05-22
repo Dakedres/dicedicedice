@@ -462,7 +462,7 @@ const handleCommand = async interaction => {
 
       for(let [ key, value ] of Object.entries(optionDice)) {
         if(value)
-          dice[key] = value
+          dice[key] = Array.isArray(value) ? value.concat(dice[key]) : value
       }
     }
 
