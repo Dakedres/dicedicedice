@@ -380,7 +380,7 @@ addSubcommands({
       openMacros(interaction.guild.id).put(name, dice),
       reloadMacros(interaction.guild.id)
     ])
-    interaction.followUp(`Macro added! Try \`/${name}\`! You might need to switch to a different server or back or reopen Discord in order for it to recognize the new command.`)
+    interaction.followUp(`Macro added! Try \`/${name}\`! You might need to switch to a different server and back or reopen Discord in order for it to recognize the new command.`)
   },
   remove: async interaction => {
     let name = interaction.options.get('name').value.toLowerCase()
@@ -459,8 +459,6 @@ const handleCommand = async interaction => {
     
     if(options) {
       let optionDice = parseOptionRoll(options.value)
-
-      console.log(optionDice)
 
       for(let [ key, value ] of Object.entries(optionDice)) {
         if(value)
