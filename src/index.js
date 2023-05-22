@@ -133,7 +133,7 @@ const rollDice = (dice, respond) => {
   let operationSymbol = dice.operation
   let response = ''
 
-  switch(dice.mode) {
+  switch(dice.mode.toLowerCase()) {
     case 'd': 
       result = rolls.reduce((a, v) => a + v, 0)
       break
@@ -269,6 +269,7 @@ const reloadMacros = async guildId => {
     Routes.applicationGuildCommands(process.env.DISCORD_ID, guildId),
     { body: commands }
   )
+    .catch(err => console.error('Failed to reload macros:', err) )
 }
 
 const elipsify = (string, maxLength) =>
@@ -360,14 +361,19 @@ addSubcommands({
   ]
 }, {
   add: async interaction => {
-    let name = interaction.options.get('name').value.toLowerCase()
     let respond = openResponses(interaction, true)
-  
+    let name = interaction.options.get('name').value.toLowerCase()
+    
     if(!constants.macroNameRegex.test(name))
       return respond("Please provide a macro name that consists of only alphanumeric characters.")
 
     if(commands.has(name))
       return respond("Uhh,, I think that macro name is already taken by my own commands, sorry.")
+
+    let macros = macroCache.get(interaction.guild.id)
+
+    if(macros && !macros[name] && Object.keys(macros).length >= 100)
+      return respond("I can't keep track of that many macros,, ;-;")
 
     let dice = interaction.options.get('dice').value
 
