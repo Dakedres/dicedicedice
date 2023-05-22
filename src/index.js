@@ -8,6 +8,7 @@ dotenv.config()
 const replies = new Map()
 const commands = new Map()
 const db = new ClassicLevel('./db')
+const macroCache = new Map()
  
 const parseRollInt = (value, defaultValue) =>
   value ? parseInt(value) : defaultValue
@@ -221,7 +222,7 @@ const interactionRespond = (interaction, content) => {
   }
 }
 
-const handleError = (error, interaction) =>
+const handleError = (interaction) => (error) =>
   interactionRespond(interaction, constants.errorMessage(error) )
     .catch(reportingError => console.error('Could not display error message:\n  ', reportingError) )
 
@@ -233,14 +234,22 @@ const addCommand = (data, callback) => {
   })
 }
 
+const addSubcommands = (data, subcommandCallbacks) =>
+  addCommand(data, interaction => {
+    return subcommandCallbacks[interaction.options.getSubcommand()](interaction)
+  })
+
 const openMacros = guildId =>
   db.sublevel(guildId).sublevel('macros')
 
-const registerMacroCommands = async guildId => {
+const reloadMacros = async guildId => {
   let commands = []
   let macros = openMacros(guildId)
+  let cacheEntry = {}
 
-  for await (let [ name, dice ] of macros.iterator() )
+  for await (let [ name, dice ] of macros.iterator() ) {
+    cacheEntry[name] = dice
+
     commands.push({
       name,
       description: elipsify("Roll " + dice.replaceAll('\n', ';'), 100),
@@ -252,6 +261,9 @@ const registerMacroCommands = async guildId => {
         }
       ]
     })
+  }
+
+  macroCache.set(guildId, cacheEntry)
 
   await rest.put(
     Routes.applicationGuildCommands(process.env.DISCORD_ID, guildId),
@@ -300,9 +312,57 @@ addCommand(
   }
 )
 
-addCommand(
-  constants.commands.macro,
-  async interaction => {
+const getMacro = async (guild, name) => {
+  
+  
+  return guild && guild[name]
+}
+
+addSubcommands({
+  name: 'macro',
+  description: "Manage macros",
+  options: [
+    {
+      name: 'add',
+      description: "Define a dice macro",
+      type: 1, // Sub command
+      options: [ 
+        {
+          name: "name",
+          description: "Name of the macro",
+          type: 3, // String
+          required: true
+        },
+        {
+          name: "dice",
+          description: "The dice expression to save as a macro",
+          type: 3, // String
+          required: true
+        }
+      ]
+    },
+    {
+      name: 'remove',
+      description: "Remove a macro",
+      type: 1, // Sub command
+      options: [ 
+        {
+          name: "name",
+          description: "Name of the macro",
+          type: 3, // String
+          required: true,
+          autocomplete: true,
+          getAutocomplete: interaction => {
+            let macros = macroCache.get(interaction.guild.id)
+
+            return macros ? Object.keys(macros) : []
+          }
+        }
+      ]
+    }
+  ]
+}, {
+  add: async interaction => {
     let name = interaction.options.get('name').value.toLowerCase()
     
     if(!constants.macroNameRegex.test(name) ) {
@@ -311,7 +371,7 @@ addCommand(
     }
 
     if(commands.has(name)) {
-      interaction.reply("Uhh... I think that macro name is already taken by my own commands, sorry.")
+      interaction.reply("Uhh,, I think that macro name is already taken by my own commands, sorry.")
       return
     }
 
@@ -323,32 +383,40 @@ addCommand(
       return
     }
 
-    // let exists = true
-    // let macros = openTable(interaction.guild, 'macros')
-    // let macro = await macros.get(name)
-    //   .catch(err => {
-    //     if(err.code == 'LEVEL_NOT_FOUND')
-    //       exists = false
-    //     else
-    //       handleError(err, interaction)
-    //   })
-
-    // if(exists) {
-    //   interaction.followUp('A macro with this name already exists in this guild.')
-    //   return
-    // }
-
     await interaction.deferReply()
 
-    let macros = openMacros(interaction.guild.id)
-
     await Promise.all([
-      macros.put(name, dice),
-      registerMacroCommands(interaction.guild.id)
+      openMacros(interaction.guild.id).put(name, dice),
+      reloadMacros(interaction.guild.id)
     ])
-    interaction.followUp(`Macro added! Try \`/${name}\``)
+    interaction.followUp(`Macro added! Try \`/${name}\`! You might need to switch to a different server or back or reopen Discord in order for it to recognize the new command.`)
+  },
+  remove: async interaction => {
+    let name = interaction.options.get('name').value.toLowerCase()
+    let macros = macroCache.get(interaction.guild.id)
+    
+    if(!macros) {
+      await interaction.reply('There aren\'t even any macros in this guild!')
+      return
+    }
+
+    let dice = macros && macroCache.get(interaction.guild.id)[name]
+
+    if(!dice){
+      await interaction.reply("There isn't a macro with that name .-.")
+      return
+    }
+
+    await interaction.deferReply()
+    await Promise.all([
+      openMacros(interaction.guild.id).del(name),
+      reloadMacros(interaction.guild.id)
+    ])
+      .catch(handleError(interaction))
+
+    await interaction.followUp(`Removed \`${name}\`, its dice expression was: \`\`\`${dice}\`\`\``)
   }
-)
+})
 
 
 
@@ -369,7 +437,7 @@ client.on('ready', async () => {
   let guildIds = await pruneDB()
 
   for(let guildId of guildIds)
-    await registerMacroCommands(guildId)
+    await reloadMacros(guildId)
 
   console.log("Ready")
 })
@@ -388,18 +456,15 @@ client.on('messageUpdate', async (oldMessage, newMessage) => {
   }
 })
 
-client.on('interactionCreate', async interaction => {
-  if(!interaction.isChatInputCommand())
-    return
-
+const handleCommand = async interaction => {
   if(commands.has(interaction.commandName) ) {
     commands.get(interaction.commandName).execute(interaction)
-      .catch(err => handleError(err, interaction) )
+      .catch(handleError(interaction))
     return
   }
 
   await interaction.deferReply()
-  let roll = await openMacros(interaction.guild.id).get(interaction.commandName)
+  let roll = macroCache.get(interaction.guild.id)[interaction.commandName]
 
   if(roll) {
     let dice = parseRoll(roll)
@@ -417,6 +482,44 @@ client.on('interactionCreate', async interaction => {
     }
 
     rollDice(dice, content => interaction.followUp(content) )
+  }
+}
+
+const findOption = (options, name) =>
+  options.find(option => option.name == name)
+
+const handleAutocomplete = async interaction => {
+  if(commands.has(interaction.commandName) ) {
+    let { data } = commands.get(interaction.commandName)
+    let subcommand = interaction.options.getSubcommand() 
+    let focusedOption = interaction.options.getFocused(true) 
+
+    if(subcommand !== undefined) {
+      data = findOption(data.options, subcommand)
+    }
+
+    let option = findOption(data.options, focusedOption.name)
+
+    if(!option) {
+      console.error('Could not find option: ' + focusedOption)
+      return
+    }
+
+    let filtered = option
+      .getAutocomplete(interaction)
+      .filter(choice => choice.startsWith(focusedOption.value) )
+      .map(choice => ({ name: choice, value: choice }) )
+
+    await interaction.respond(filtered)
+  }
+}
+
+client.on('interactionCreate', interaction => {
+  if(interaction.isChatInputCommand()) {
+    return handleCommand(interaction)
+  } else if(interaction.isAutocomplete()) {
+    return handleAutocomplete(interaction)
+      .catch(console.error)
   }
 })
 

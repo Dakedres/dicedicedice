@@ -12,20 +12,39 @@ const constants = {
 
     macro: {
       name: 'macro',
-      type: 1,
-      description: "Define a dice macro",
+      description: "Manage macros",
       options: [
         {
-          name: "name",
-          description: "Name of the macro",
-          type: 3, // String
-          required: true
+          name: 'add',
+          description: "Define a dice macro",
+          type: 1, // Sub command
+          options: [ 
+            {
+              name: "name",
+              description: "Name of the macro",
+              type: 3, // String
+              required: true
+            },
+            {
+              name: "dice",
+              description: "The dice expression to save as a macro",
+              type: 3, // String
+              required: true
+            }
+          ]
         },
         {
-          name: "dice",
-          description: "The dice expression to save as a macro",
-          type: 3, // String
-          required: true
+          name: 'remove',
+          description: "Remove a macro",
+          type: 1, // Sub command
+          options: [ 
+            {
+              name: "name",
+              description: "Name of the macro",
+              type: 3, // String
+              required: true
+            }
+          ]
         }
       ]
     }
