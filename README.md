@@ -16,7 +16,7 @@ Icon by [Zauromoun](https://www.tumblr.com/zauromoun)
 > ╭ 2l6 + 3  
 > ` 4 ` ⟵ [4, 1] 2l6 + 3
 - "emphasis" rolls (take the furthest from the median, popularized by BLeeM):
-> ╭ 2l6 + 3  
+> ╭ 2f20 + 5
 > ` 13 ` ⟵ [8, 10] 2f20 + 5
 - Multiplication/division/subtraction, whatever you want
 > d6 * 1  
