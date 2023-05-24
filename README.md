@@ -15,6 +15,9 @@ Icon by [Zauromoun](https://www.tumblr.com/zauromoun)
 - "take the lowest" rolls:
 > ╭ 2l6 + 3  
 > ` 4 ` ⟵ [4, 1] 2l6 + 3
+- "emphasis" rolls (take the furthest from the median, popularized by BLeeM):
+> ╭ 2l6 + 3  
+> ` 13 ` ⟵ [8, 10] 2f20 + 5
 - Multiplication/division/subtraction, whatever you want
 > d6 * 1  
 > d6 x 2  
