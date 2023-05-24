@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, REST, Routes } from 'discord.js';
+import { Client, GatewayIntentBits, Partials, REST, Routes } from 'discord.js';
 import * as dotenv from 'dotenv'
 import constants from './constants.js';
 import { ClassicLevel } from 'classic-level';
@@ -333,6 +333,7 @@ const openResponses = (interaction, ephemeral) => async content =>
 addSubcommands({
   name: 'macro',
   description: "Manage macros",
+  'dm_permission': false,
   options: [
     {
       name: 'add',
@@ -429,16 +430,26 @@ addSubcommands({
 
 const client = new Client({
   intents: [
-      GatewayIntentBits.Guilds,
-      GatewayIntentBits.GuildMessages,
-      GatewayIntentBits.MessageContent,
-      GatewayIntentBits.DirectMessages
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.DirectMessages
+  ],
+  partials: [
+    Partials.Channel
   ]
 })
 
+const safeSubscribe = (event, callback) => {
+  client.on(event, (...args) => {
+    return callback(...args)
+      .catch(err => console.error(err))
+  })
+}
+
 const rest = new REST().setToken(process.env.DISCORD_TOKEN)
 
-client.on('ready', async () => {
+safeSubscribe('ready', async () => {
   console.log("Logged in!")
 
   let guildIds = await pruneDB()
@@ -449,9 +460,9 @@ client.on('ready', async () => {
   console.log("Ready")
 })
 
-client.on('messageCreate', messageCycle)
+safeSubscribe('messageCreate', messageCycle)
 
-client.on('messageUpdate', async (oldMessage, newMessage) => {
+safeSubscribe('messageUpdate', async (oldMessage, newMessage) => {
   if(replies.has(newMessage.id) ) {
     let { id } = replies.get(newMessage.id)
 
@@ -519,7 +530,7 @@ const handleAutocomplete = async interaction => {
   }
 }
 
-client.on('interactionCreate', interaction => {
+safeSubscribe('interactionCreate', interaction => {
   if(interaction.isChatInputCommand()) {
     return handleCommand(interaction)
   } else if(interaction.isAutocomplete()) {
