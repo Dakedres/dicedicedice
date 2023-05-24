@@ -113,6 +113,22 @@ const handleMessage = (message, respond) => {
   rollDice(dice, respond)
 }
 
+const bleemRoll = (dice, rolls, comparison, resultDistance = -1) => {
+  let result = 0
+  let pseudoMedian = Math.floor(dice.size / 2)
+
+  for(let roll of rolls) {
+    let distance = Math.abs(roll - pseudoMedian)
+
+    if(comparison(result, resultDistance)) {
+      result = roll
+      resultDistance = distance
+    }
+  }
+
+  return result
+}
+
 const rollDice = (dice, respond) => {
   if(dice.size > 255) {
     respond('That die is way too big... .-.')
@@ -132,6 +148,7 @@ const rollDice = (dice, respond) => {
   let result = 0
   let operationSymbol = dice.operation
   let response = ''
+  let comparison
 
   switch(dice.mode.toLowerCase()) {
     case 'd': 
@@ -144,6 +161,14 @@ const rollDice = (dice, respond) => {
 
     case 'l':
       result = rolls.reduce((a, v) => v < a ? v : a, Infinity)
+      break
+
+    case 'f':
+      result = bleemRoll(dice, rolls, (l, r) => l > r, -1)
+      break
+
+    case 'b':
+      result = bleemRoll(dice, rolls, (l, r) => l < r, Infinity)
       break
   }
 

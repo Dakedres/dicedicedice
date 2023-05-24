@@ -1,6 +1,6 @@
 const constants = {
-  rollRegex: /^(\d+)?([dhl])(\d+)(\s*([+\-*x\/])\s*(\d+))?/,
-  optionRollRegex: /^(\d+)?(([dhl])(\d+))?(\s*([+\-*x\/])\s*(\d+))?/,
+  rollRegex: /^(\d+)?([dhlfb])(\d+)(\s*([+\-*x\/])\s*(\d+))?/,
+  optionRollRegex: /^(\d+)?(([dhlfb])(\d+))?(\s*([+\-*x\/])\s*(\d+))?/,
   descriptionRegex: /\s*((\d*-\d*)|(\d+))?([^;\n]+)/g,
   macroNameRegex: /^[a-z0-9]+$/,
 
