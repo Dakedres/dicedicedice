@@ -1,41 +1,107 @@
-import { Client, GatewayIntentBits, Partials, REST, Routes } from 'discord.js';
-import * as dotenv from 'dotenv'
-import constants from './constants.js';
-import { ClassicLevel } from 'classic-level';
+import constants from './constants.js'
+import { WebSocketServer } from 'ws'
+import { EventEmitter } from 'node:events'
 
-dotenv.config()
+let connections = new Map()
 
-const replies = new Map()
-const commands = new Map()
-const db = new ClassicLevel('./db')
-const macroCache = new Map()
- 
-const parseRollInt = (value, defaultValue) =>
-  value ? parseInt(value) : defaultValue
+//
+// Login & events
+//
 
-const parseOptionRoll = expression => {
-  let match = constants.optionRollRegex.exec(expression.trim())
+const handleConnection = ws => {
+  let client
 
-  let [ 
-    count,
-    modeSize,
-    mode,
-    size,
-    operationModifier,
-    operation,
-    modifier
-  ] = match
-    .slice(1)
-    
-  return {
-    count: parseRollInt(count),
-    mode,
-    size: parseRollInt(size),
-    operation,
-    modifier: parseRollInt(modifier),
-    descriptionConditions: pullDescription(expression, match)
-  }
+  ws.on('error', console.error)
+
+  ws.on('message', data => {
+    let event
+
+    try {
+      event = JSON.parse(data.toString('utf-8') )
+    } catch(err) {
+      sendToWebsocket(ws, constants.errors.invalidPacket(err) )
+      return
+    }
+
+    if(typeof event !== 'object' || Array.isArray(event) ) {
+      sendToWebsocket(ws, constants.errors.invalidPacket('Event is not an object') )
+      return
+    }
+
+    console.log(event)
+
+    if(client) {
+      if(event.reference && typeof event.reference == 'object')
+        sendToWebsocket(ws, constants.errors.invalidReference('Reference cannot be an object') )
+
+      event.client = client
+      handleEvent(event)
+    } else if(event.type === constants.events.login) {
+      client = handleLogin(event, ws)
+    }
+  })
 }
+
+const handleLogin = (event, ws) => {
+  if(constants.clients.get(event.name) !== event.password) {
+    replyToWebsocket(ws, event, constants.errors.badLogin() )
+    return
+  }
+
+  console.log('worked?')
+
+  connections.set(event.name, ws)
+  replyToWebsocket(ws, event, { type: 'success' })
+  return event.name
+}
+
+const sendToWebsocket = (ws, event) =>
+  ws.send(JSON.stringify(event) )
+
+const replyToWebsocket = (ws, toEvent, withEvent) => {
+  let event = {
+    ...withEvent,
+    reference: toEvent.reference
+  }
+
+  console.log(connections)
+
+  return sendToWebsocket(ws, event)
+}
+
+const handleEvent = event => {
+  if(typeof event.type != 'string') {
+    reply(event, constants.errors.invalidPacket("No event type.") )
+  }
+
+  bot.emit(event.type, event)
+}
+
+const reply = (toEvent, withEvent) =>
+  replyToWebsocket(connections.get(toEvent.client), toEvent, withEvent)
+
+//
+// Command handling
+//
+
+const handleMessage = message => {
+  console.log(message)
+
+  let dice = parseRoll(message.content)
+  
+  const respond = content => reply(message, {
+    type: 'message',
+    content
+  })
+
+  if(dice)
+    return rollDice(dice, respond)
+}
+
+//
+// Rolls
+//   Most of this is pulled straight from the original
+//   Discord version atm.
 
 const parseRoll = expression => {
   let match = constants.rollRegex.exec(expression.trim())
@@ -62,55 +128,14 @@ const parseRoll = expression => {
   }
 }
 
+const parseRollInt = (value, defaultValue) =>
+  value ? parseInt(value) : defaultValue
+
 const pullDescription = (expression, match) => {
   if(match[0].length == expression.length)
     return
 
   return parseDescription(expression.slice(match[0].length))
-}
-
-const parseDescription = description => {
-  let conditions = []
-  let match
-
-  while((match = constants.descriptionRegex.exec(description)) !== null) {
-    let range
-    let [
-      rangeExp,
-      valueExp,
-      content
-    ] = match.slice(2)
-
-    if(rangeExp) {
-      let split = rangeExp.split('-')
-
-      range = {
-        lower: parseRollInt(split[0], -Infinity),
-        upper: parseRollInt(split[1], Infinity)
-      }
-    } else if(valueExp) {
-      range = {
-        upper: valueExp,
-        lower: valueExp
-      }
-    }
-
-    conditions.push({
-      range,
-      content: content.trim()
-    })
-  }
-
-  return conditions
-}
-
-const handleMessage = (message, respond) => {
-  let dice = parseRoll(message.content)
-
-  if(dice == undefined)
-    return // No dice
-
-  rollDice(dice, respond)
 }
 
 const rollDice = (dice, respond) => {
@@ -197,362 +222,16 @@ const rollDice = (dice, respond) => {
   respond(response)
 }
 
-const saveReply = (message, reply) => {
-  replies.set(message.id, {
-    id: reply.id,
-    timestamp: Date.now()
-  })
-}
+//
+// Hooks
+//
 
-const messageCycle = async message => {
-  handleMessage(message, async content => {
-    saveReply(message, await message.reply(content) )
-  })
-}
+const bot = new EventEmitter()
 
-const rehandleMessage = async (message, reply) => {
-  handleMessage(message, async content => {
-    saveReply(message, await reply.edit(content) )
-  })
-}
+bot.on('message', handleMessage)
 
-const pruneReplies = () => {
-  for(let [ id, entry ] of replies.entries()) {
-    let age = Date.now() - entry.timestamp
-
-    if(age > 1000 * 60 * 3) {
-      replies.delete(id)
-    }
-  }
-}
-
-const interactionRespond = (interaction, content) => {
-  let reply = { content, ephemeral: true }
-
-  if(interaction.replied || interaction.deferred) {
-    return interaction.followUp(reply)
-  } else {
-    return interaction.reply(reply)
-  }
-}
-
-const handleError = (interaction) => (error) =>
-  interactionRespond(interaction, constants.errorMessage(error) )
-    .catch(reportingError => console.error('Could not display error message:\n  ', reportingError) )
-
-
-const addCommand = (data, callback) => {
-  commands.set(data.name, {
-    data,
-    execute: callback
-  })
-}
-
-const addSubcommands = (data, subcommandCallbacks) =>
-  addCommand(data, interaction => {
-    return subcommandCallbacks[interaction.options.getSubcommand()](interaction)
-  })
-
-const openMacros = guildId =>
-  db.sublevel(guildId).sublevel('macros')
-
-const reloadMacros = async guildId => {
-  let commands = []
-  let macros = openMacros(guildId)
-  let cacheEntry = {}
-
-  for await (let [ name, dice ] of macros.iterator() ) {
-    cacheEntry[name] = dice
-
-    commands.push({
-      name,
-      description: elipsify("Roll " + dice.replaceAll('\n', ';'), 100),
-      options: [
-        {
-          name: "options",
-          description: "Dice, modifiers, or descriptions to apply over the macro",
-          type: 3
-        }
-      ]
-    })
-  }
-
-  macroCache.set(guildId, cacheEntry)
-
-  await rest.put(
-    Routes.applicationGuildCommands(process.env.DISCORD_ID, guildId),
-    { body: commands }
-  )
-    .catch(err => console.error('Failed to reload macros:', err) )
-}
-
-const elipsify = (string, maxLength) =>
-  string.length > maxLength ? string.slice(0, maxLength - 3) + '...' : string
-
-const pruneDB = async () => {
-  let validIds = []
-
-  for await(let key of db.keys()) {
-    let [ guildId ] = key.split('!').slice(1)
-
-    if(validIds.includes(guildId))
-      continue
-
-    if(client.guilds.cache.has(guildId)) {
-      validIds.push(guildId)
-    } else {
-      await db.del(key)
-    }
-  }
-
-  return validIds
-}
-
-
-addCommand(
-  constants.commands.about,
-  async interaction => {
-    let embed = {
-      title: 'dicedicedice',
-      thumbnail: {
-        url: constants.iconUrl
-      },
-      description: constants.aboutMessage(client.guilds.cache.size) 
-    } 
-
-    await interaction.reply({
-      embeds: [ embed ],
-      ephemeral: true
-    })
-  }
-)
-
-const openResponses = (interaction, ephemeral) => async content =>
-  interaction.reply({ content, ephemeral })
-
-addSubcommands({
-  name: 'macro',
-  description: "Manage macros",
-  'dm_permission': false,
-  options: [
-    {
-      name: 'add',
-      description: "Define a dice macro",
-      type: 1, // Sub command
-      options: [ 
-        {
-          name: "name",
-          description: "Name of the macro",
-          type: 3, // String
-          required: true
-        },
-        {
-          name: "dice",
-          description: "The dice expression to save as a macro",
-          type: 3, // String
-          required: true
-        }
-      ]
-    },
-    {
-      name: 'remove',
-      description: "Remove a macro",
-      type: 1, // Sub command
-      options: [ 
-        {
-          name: "name",
-          description: "Name of the macro",
-          type: 3, // String
-          required: true,
-          autocomplete: true,
-          getAutocomplete: interaction => {
-            let macros = macroCache.get(interaction.guild.id)
-
-            return macros ? Object.keys(macros) : []
-          }
-        }
-      ]
-    }
-  ]
-}, {
-  add: async interaction => {
-    let respond = openResponses(interaction, true)
-    let name = interaction.options.get('name').value.toLowerCase()
-    
-    if(!constants.macroNameRegex.test(name))
-      return respond("Please provide a macro name that consists of only alphanumeric characters.")
-
-    if(commands.has(name))
-      return respond("Uhh,, I think that macro name is already taken by my own commands, sorry.")
-
-    let macros = macroCache.get(interaction.guild.id)
-
-    if(macros && !macros[name] && Object.keys(macros).length >= 100)
-      return respond("I can't keep track of that many macros,, ;-;")
-
-    let dice = interaction.options.get('dice').value
-
-    if(!constants.rollRegex.test(dice) )
-      return respond("Please provide a valid roll expression.")
-
-    await interaction.deferReply({ ephemeral: true })
-
-    await Promise.all([
-      openMacros(interaction.guild.id).put(name, dice),
-      reloadMacros(interaction.guild.id)
-    ])
-    interaction.followUp(`Macro added! Try \`/${name}\`! You might need to switch to a different server and back or reopen Discord in order for it to recognize the new command.`)
-  },
-  remove: async interaction => {
-    let name = interaction.options.get('name').value.toLowerCase()
-    let macros = macroCache.get(interaction.guild.id)
-    let respond = openResponses(interaction, true)
-    
-    if(!macros)
-      return respond('There aren\'t even any macros in this guild!')
-
-    let dice = macros && macroCache.get(interaction.guild.id)[name]
-
-    if(!dice)
-      return respond("There isn't a macro with that name .-.")
-
-    await interaction.deferReply({ ephemeral: true })
-    await Promise.all([
-      openMacros(interaction.guild.id).del(name),
-      reloadMacros(interaction.guild.id)
-    ])
-
-    await interaction.followUp(`Removed \`${name}\`, its dice expression was: \`\`\`${dice}\`\`\``)
-  }
+const server = new WebSocketServer({
+  port: 8080
 })
 
-
-
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-    GatewayIntentBits.DirectMessages
-  ],
-  partials: [
-    Partials.Channel
-  ]
-})
-
-const safeSubscribe = (event, callback) => {
-  client.on(event, (...args) => {
-    return callback(...args)
-      .catch(err => console.error(err))
-  })
-}
-
-const rest = new REST().setToken(process.env.DISCORD_TOKEN)
-
-safeSubscribe('ready', async () => {
-  console.log("Logged in!")
-
-  let guildIds = await pruneDB()
-
-  for(let guildId of guildIds)
-    await reloadMacros(guildId)
-
-  console.log("Ready")
-})
-
-safeSubscribe('messageCreate', messageCycle)
-
-safeSubscribe('messageUpdate', async (oldMessage, newMessage) => {
-  if(replies.has(newMessage.id) ) {
-    let { id } = replies.get(newMessage.id)
-
-    newMessage.channel.messages.fetch(id)
-      .then(reply => rehandleMessage(newMessage, reply) )
-      .catch(err => messageCycle(newMessage) )
-  } else {
-    messageCycle(newMessage)
-  }
-})
-
-const handleCommand = async interaction => {
-  if(commands.has(interaction.commandName) ) {
-    commands.get(interaction.commandName).execute(interaction)
-      .catch(handleError(interaction))
-    return
-  }
-
-  await interaction.deferReply()
-  let roll = macroCache.get(interaction.guild.id)[interaction.commandName]
-
-  if(roll) {
-    let dice = parseRoll(roll)
-    let options = interaction.options.get('options')
-    
-    if(options) {
-      let optionDice = parseOptionRoll(options.value)
-
-      for(let [ key, value ] of Object.entries(optionDice)) {
-        if(value)
-          dice[key] = Array.isArray(value) ? value.concat(dice[key]) : value
-      }
-    }
-
-    rollDice(dice, content => interaction.followUp(content) )
-  }
-}
-
-const findOption = (options, name) =>
-  options.find(option => option.name == name)
-
-const handleAutocomplete = async interaction => {
-  if(commands.has(interaction.commandName) ) {
-    let { data } = commands.get(interaction.commandName)
-    let subcommand = interaction.options.getSubcommand() 
-    let focusedOption = interaction.options.getFocused(true) 
-
-    if(subcommand !== undefined) {
-      data = findOption(data.options, subcommand)
-    }
-
-    let option = findOption(data.options, focusedOption.name)
-
-    if(!option) {
-      console.error('Could not find option: ' + focusedOption)
-      return
-    }
-
-    let filtered = option
-      .getAutocomplete(interaction)
-      .filter(choice => choice.startsWith(focusedOption.value) )
-      .map(choice => ({ name: choice, value: choice }) )
-
-    await interaction.respond(filtered)
-  }
-}
-
-safeSubscribe('interactionCreate', interaction => {
-  if(interaction.isChatInputCommand()) {
-    return handleCommand(interaction)
-  } else if(interaction.isAutocomplete()) {
-    return handleAutocomplete(interaction)
-      .catch(console.error)
-  }
-})
-
-
-
-;(async () => {
-  await rest.put(
-    Routes.applicationCommands(process.env.DISCORD_ID),
-    {
-      body: [ ...commands.values() ]
-        .map(command => command.data )
-    }
-  )
-    .catch(err => console.error('Command registration failed: ', err) )  
-
-  await client.login(process.env.DISCORD_TOKEN)
-    .catch(err => console.error('Login failed: ', err) )
-
-  setInterval(pruneReplies, 1000 * 60)
-})()
+server.on('connection', handleConnection)
