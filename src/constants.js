@@ -4,6 +4,41 @@ const constants = {
   descriptionRegex: /\s*((\d*-\d*)|(\d+))?([^;\n]+)/g,
   macroNameRegex: /^[a-z0-9]+$/,
 
+  events: {
+    login: 'login'
+  },
+
+  schemas: {
+    events: {
+      login: {
+        'name': 'string',
+        'password': 'string'
+      }
+    }
+  },
+
+  errors: {
+    invalidPacket: error => ({
+      type: 'error',
+      id: 0,
+      message: 'Invalid packet: ' + error
+    }),
+    invalidReference: error => ({
+      type: 'error',
+      id: 0,
+      message: 'Invalid packet reference: ' + error
+    }),
+    badLogin: () => ({
+      type: 'error',
+      id: 10,
+      message: 'There is no client with that name, or the password does not match.'
+    })
+  },
+
+  clients: new Map([
+    [ 'dev', 'dev' ]
+  ]),
+
   commands: {
     about: {
       name: 'about',
@@ -51,6 +86,7 @@ const constants = {
   },
 
   iconUrl: 'https://github.com/Dakedres/dicedicedice/raw/main/assets/eater-transparent.png',
+
 
   errorMessage: error => `\
 Something went wrong trying to execute that command.
